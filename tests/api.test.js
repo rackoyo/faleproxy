@@ -24,14 +24,31 @@ testApp.post('/fetch', async (req, res) => {
     const response = await require('axios').get(url);
     const html = response.data;
     
-    // Use cheerio to parse HTML and selectively replace text content, not URLs
+    // Use cheerio to parse HTML
     const $ = require('cheerio').load(html);
+    
+    // Store original styles and scripts
+    const styles = [];
+
+    // Collect all external stylesheets
+    $('link[rel="stylesheet"]').each((i, el) => {
+      const href = $(el).attr('href');
+      if (href) {
+        // Convert relative URLs to absolute
+        const absoluteUrl = href.startsWith('http') ? href : new URL(href, url).href;
+        styles.push(absoluteUrl);
+      }
+    });
+
+    // Collect inline styles
+    $('style').each((i, el) => {
+      styles.push($(el).html());
+    });
     
     // Process text nodes in the body
     $('body *').contents().filter(function() {
       return this.nodeType === 3; // Text nodes only
     }).each(function() {
-      // Replace text content but not in URLs or attributes
       const text = $(this).text();
       const newText = text.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
       if (text !== newText) {
@@ -42,11 +59,39 @@ testApp.post('/fetch', async (req, res) => {
     // Process title separately
     const title = $('title').text().replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
     $('title').text(title);
+
+    // Process alt attributes for images
+    $('img').each((i, el) => {
+      const alt = $(el).attr('alt');
+      if (alt) {
+        $(el).attr('alt', alt.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale'));
+      }
+    });
+
+    // Convert all relative URLs to absolute
+    $('img, script, link, a').each((i, el) => {
+      const $el = $(el);
+      ['src', 'href'].forEach(attr => {
+        const val = $el.attr(attr);
+        if (val && !val.startsWith('http') && !val.startsWith('data:') && !val.startsWith('mailto:')) {
+          try {
+            const absoluteUrl = new URL(val, url).href;
+            $el.attr(attr, absoluteUrl);
+          } catch (e) {
+            console.warn(`Failed to convert URL: ${val}`);
+          }
+        }
+      });
+    });
+
+    // Extract body content
+    const bodyContent = $('body').html();
     
     return res.json({ 
       success: true, 
-      content: $.html(),
-      title: title,
+      content: bodyContent,
+      styles,
+      title,
       originalUrl: url
     });
   } catch (error) {
@@ -84,22 +129,63 @@ describe('API Endpoints', () => {
     expect(response.body.error).toBe('URL is required');
   });
 
-  test('POST /fetch should fetch and replace Yale with Fale', async () => {
+  test('POST /fetch should fetch and replace Yale with Fale while preserving URLs', async () => {
+    const testUrl = 'https://example.com';
+    
     // Mock the external URL
-    nock('https://example.com')
+    nock(testUrl)
       .get('/')
       .reply(200, sampleHtmlWithYale);
 
     const response = await request(testApp)
       .post('/fetch')
-      .send({ url: 'https://example.com/' });
+      .send({ url: testUrl + '/' });
 
     expect(response.statusCode).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.title).toBe('Fale University Test Page');
     expect(response.body.content).toContain('Welcome to Fale University');
-    expect(response.body.content).toContain('https://www.yale.edu/about');  // URL should be unchanged
-    expect(response.body.content).toContain('>About Fale<');  // Link text should be changed
+    
+    // Check URL preservation and conversion
+    expect(response.body.content).toContain('https://www.yale.edu/about');  // Absolute URL unchanged
+    expect(response.body.content).toContain(`${testUrl}/admissions`);  // Relative URL converted
+    expect(response.body.content).toContain(`${testUrl}/admissions/apply`);  // Nested relative URL converted
+    expect(response.body.content).toContain('mailto:info@yale.edu');  // mailto link preserved
+    
+    // Check text replacement
+    expect(response.body.content).toContain('>About Fale<');  // Link text changed
+    expect(response.body.content).toContain('>Fale Admissions<');  // Link text changed
+    
+    // Check style preservation
+    expect(response.body.styles).toHaveLength(3);  // 2 external + 1 inline
+    expect(response.body.styles).toContain('https://cdn.yale.edu/styles/yale.css');  // External absolute
+    expect(response.body.styles).toContain(`${testUrl}/styles/main.css`);  // External relative
+    expect(response.body.styles[2]).toContain('.yale-info { color: #00356b; }');  // Inline style
+  });
+
+  test('POST /fetch should properly handle image URLs and alt text', async () => {
+    const testUrl = 'https://example.com';
+    
+    nock(testUrl)
+      .get('/')
+      .reply(200, sampleHtmlWithYale);
+
+    const response = await request(testApp)
+      .post('/fetch')
+      .send({ url: testUrl + '/' });
+
+    expect(response.statusCode).toBe(200);
+    
+    // Check image URL handling
+    expect(response.body.content).toContain(`${testUrl}/images/logo.png`);  // Root-relative URL
+    expect(response.body.content).toContain(`${testUrl}/images/campus.jpg`);  // Relative URL
+    expect(response.body.content).toContain('https://www.yale.edu/images/seal.png');  // Absolute URL unchanged
+    
+    // Check image attributes
+    expect(response.body.content).toContain('class="yale-logo"');  // Class preserved
+    expect(response.body.content).toContain('alt="Fale Logo"');  // Alt text changed
+    expect(response.body.content).toContain('alt="Fale Campus"');  // Alt text changed
+    expect(response.body.content).toContain('alt="Fale Seal"');  // Alt text changed
   });
 
   test('POST /fetch should handle errors from external sites', async () => {

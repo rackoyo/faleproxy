@@ -45,20 +45,67 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Create a sandboxed iframe to display the content
             const iframe = document.createElement('iframe');
-            iframe.sandbox = 'allow-same-origin allow-scripts';
+            iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms';
             contentDisplay.innerHTML = '';
             contentDisplay.appendChild(iframe);
             
-            // Write the modified HTML to the iframe
+            // Write the modified HTML to the iframe with preserved styles
             const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
             iframeDocument.open();
-            iframeDocument.write(data.content);
+            
+            // Create a complete HTML document with styles
+            const htmlContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>${data.title}</title>
+                    ${data.styles.map(style => {
+                        if (style.startsWith('http')) {
+                            return `<link rel="stylesheet" href="${style}">`;
+                        }
+                        return `<style>${style}</style>`;
+                    }).join('\n')}
+                    <style>
+                        /* Override styles to ensure content is visible */
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            min-height: 100vh;
+                            width: 100%;
+                            background-color: white;
+                        }
+                        img {
+                            max-width: 100%;
+                            height: auto;
+                        }
+                    </style>
+                </head>
+                <body>${data.content}</body>
+                </html>
+            `;
+            
+            iframeDocument.write(htmlContent);
             iframeDocument.close();
             
             // Adjust iframe height to match content
-            iframe.onload = function() {
-                iframe.style.height = iframeDocument.body.scrollHeight + 'px';
-                
+            function adjustIframeHeight() {
+                const body = iframeDocument.body;
+                const html = iframeDocument.documentElement;
+                const height = Math.max(
+                    body.scrollHeight,
+                    body.offsetHeight,
+                    html.clientHeight,
+                    html.scrollHeight,
+                    html.offsetHeight
+                );
+                iframe.style.height = height + 'px';
+            }
+            
+            // Adjust height after images and resources load
+            iframe.onload = () => {
+                adjustIframeHeight();
                 // Make sure links open in a new tab
                 const links = iframeDocument.querySelectorAll('a');
                 links.forEach(link => {
@@ -66,6 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     link.rel = 'noopener noreferrer';
                 });
             };
+            
+            // Add a resize observer to handle dynamic content changes
+            if (iframeDocument.body) {
+                const resizeObserver = new ResizeObserver(() => {
+                    adjustIframeHeight();
+                });
+                resizeObserver.observe(iframeDocument.body);
+            }
             
             // Show result container
             resultContainer.classList.remove('hidden');

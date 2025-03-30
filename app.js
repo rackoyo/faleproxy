@@ -29,18 +29,33 @@ app.post('/fetch', async (req, res) => {
     const response = await axios.get(url);
     const html = response.data;
 
-    // Use cheerio to parse HTML and selectively replace text content, not URLs
+    // Use cheerio to parse HTML
     const $ = cheerio.load(html);
     
+    // Store original styles and scripts
+    const styles = [];
+    const scripts = [];
+
+    // Collect all external stylesheets
+    $('link[rel="stylesheet"]').each((i, el) => {
+      const href = $(el).attr('href');
+      if (href) {
+        // Convert relative URLs to absolute
+        const absoluteUrl = href.startsWith('http') ? href : new URL(href, url).href;
+        styles.push(absoluteUrl);
+      }
+    });
+
+    // Collect inline styles
+    $('style').each((i, el) => {
+      styles.push($(el).html());
+    });
+
     // Function to replace text but skip URLs and attributes
     function replaceYaleWithFale(i, el) {
       if ($(el).children().length === 0 || $(el).text().trim() !== '') {
-        // Get the HTML content of the element
         let content = $(el).html();
-        
-        // Only process if it's a text node
         if (content && $(el).children().length === 0) {
-          // Replace Yale with Fale in text content only
           content = content.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
           $(el).html(content);
         }
@@ -51,7 +66,6 @@ app.post('/fetch', async (req, res) => {
     $('body *').contents().filter(function() {
       return this.nodeType === 3; // Text nodes only
     }).each(function() {
-      // Replace text content but not in URLs or attributes
       const text = $(this).text();
       const newText = text.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
       if (text !== newText) {
@@ -62,11 +76,31 @@ app.post('/fetch', async (req, res) => {
     // Process title separately
     const title = $('title').text().replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
     $('title').text(title);
+
+    // Convert all relative URLs (images, links, etc.) to absolute URLs
+    $('img, script, link, a').each((i, el) => {
+      const $el = $(el);
+      ['src', 'href'].forEach(attr => {
+        const val = $el.attr(attr);
+        if (val && !val.startsWith('http') && !val.startsWith('data:')) {
+          try {
+            const absoluteUrl = new URL(val, url).href;
+            $el.attr(attr, absoluteUrl);
+          } catch (e) {
+            console.warn(`Failed to convert URL: ${val}`);
+          }
+        }
+      });
+    });
+
+    // Extract body content
+    const bodyContent = $('body').html();
     
     return res.json({ 
       success: true, 
-      content: $.html(),
-      title: title,
+      content: bodyContent,
+      styles,
+      title,
       originalUrl: url
     });
   } catch (error) {
