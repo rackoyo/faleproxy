@@ -5,6 +5,8 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 const { sampleHtmlWithYale } = require('./test-utils');
 const nock = require('nock');
+const fs = require('fs').promises;
+const path = require('path');
 
 // Set a different port for testing to avoid conflict with the main app
 const TEST_PORT = 3099;
@@ -17,18 +19,25 @@ describe('Integration Tests', () => {
     nock.disableNetConnect();
     nock.enableNetConnect('127.0.0.1');
     
-    // Create a temporary test app file
-    await execAsync('cp app.js app.test.js');
-    await execAsync(`sed -i '' 's/const PORT = 3001/const PORT = ${TEST_PORT}/' app.test.js`);
-    
-    // Start the test server
-    server = require('child_process').spawn('node', ['app.test.js'], {
-      detached: true,
-      stdio: 'ignore'
-    });
-    
-    // Give the server time to start
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Create a temporary test app file
+      const appContent = await fs.readFile(path.join(__dirname, '..', 'app.js'), 'utf8');
+      const modifiedContent = appContent.replace(/const PORT = \d+/, `const PORT = ${TEST_PORT}`);
+      await fs.writeFile(path.join(__dirname, '..', 'app.test.js'), modifiedContent);
+      
+      // Start the test server
+      server = require('child_process').spawn('node', ['app.test.js'], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: path.join(__dirname, '..')
+      });
+      
+      // Give the server time to start
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error) {
+      console.error('Setup failed:', error);
+      throw error;
+    }
   }, 10000); // Increase timeout for server startup
 
   afterAll(async () => {
@@ -36,7 +45,11 @@ describe('Integration Tests', () => {
     if (server && server.pid) {
       process.kill(-server.pid);
     }
-    await execAsync('rm app.test.js');
+    try {
+      await fs.unlink(path.join(__dirname, '..', 'app.test.js'));
+    } catch (error) {
+      console.warn('Failed to clean up test file:', error);
+    }
     nock.cleanAll();
     nock.enableNetConnect();
   });

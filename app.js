@@ -51,15 +51,12 @@ app.post('/fetch', async (req, res) => {
       styles.push($(el).html());
     });
 
-    // Function to replace text but skip URLs and attributes
-    function replaceYaleWithFale(i, el) {
-      if ($(el).children().length === 0 || $(el).text().trim() !== '') {
-        let content = $(el).html();
-        if (content && $(el).children().length === 0) {
-          content = content.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
-          $(el).html(content);
-        }
-      }
+    // Function to replace Yale with Fale while preserving case
+    function replaceYaleWithFale(text) {
+      return text
+        .replace(/YALE/g, 'FALE')
+        .replace(/Yale/g, 'Fale')
+        .replace(/yale/g, 'fale');
     }
     
     // Process text nodes in the body
@@ -67,15 +64,16 @@ app.post('/fetch', async (req, res) => {
       return this.nodeType === 3; // Text nodes only
     }).each(function() {
       const text = $(this).text();
-      const newText = text.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
+      const newText = replaceYaleWithFale(text);
       if (text !== newText) {
         $(this).replaceWith(newText);
       }
     });
     
     // Process title separately
-    const title = $('title').text().replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
-    $('title').text(title);
+    const title = $('title').text();
+    const newTitle = replaceYaleWithFale(title);
+    $('title').text(newTitle);
 
     // Convert all relative URLs (images, links, etc.) to absolute URLs
     $('img, script, link, a').each((i, el) => {
@@ -100,7 +98,7 @@ app.post('/fetch', async (req, res) => {
       success: true, 
       content: bodyContent,
       styles,
-      title,
+      title: newTitle,
       originalUrl: url
     });
   } catch (error) {
