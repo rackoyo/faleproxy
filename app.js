@@ -53,6 +53,7 @@ app.post('/fetch', async (req, res) => {
 
     // Function to replace Yale with Fale while preserving case
     function replaceYaleWithFale(text) {
+      if (!text) return text;
       return text
         .replace(/YALE/g, 'FALE')
         .replace(/Yale/g, 'Fale')
@@ -60,8 +61,8 @@ app.post('/fetch', async (req, res) => {
     }
     
     // Process text nodes in the body
-    $('body *').contents().filter(function() {
-      return this.nodeType === 3; // Text nodes only
+    $('*').contents().filter(function() {
+      return this.type === 'text';
     }).each(function() {
       const text = $(this).text();
       const newText = replaceYaleWithFale(text);
@@ -101,6 +102,7 @@ app.post('/fetch', async (req, res) => {
       title: newTitle,
       originalUrl: url
     });
+
   } catch (error) {
     console.error('Error fetching URL:', error.message);
     return res.status(500).json({ 
