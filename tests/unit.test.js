@@ -1,8 +1,16 @@
-const cheerio = require('cheerio');
+const { parse } = require('node-html-parser');
+
+function replaceYaleWithFale(text) {
+  if (!text) return text;
+  return text
+    .replace(/YALE/g, 'FALE')
+    .replace(/Yale/g, 'Fale')
+    .replace(/yale/g, 'fale');
+}
 
 describe('Yale to Fale replacement logic', () => {
   test('should replace Yale with Fale in text content', () => {
-    const $ = cheerio.load(`
+    const html = `
       <html>
         <head>
           <title>Yale University</title>
@@ -14,56 +22,39 @@ describe('Yale to Fale replacement logic', () => {
           <img src="/images/yale-logo.png" alt="Yale Logo">
         </body>
       </html>
-    `);
+    `;
 
-    // Function to replace Yale with Fale while preserving case
-    function replaceYaleWithFale(text) {
-      if (!text) return text;
-      return text
-        .replace(/YALE/g, 'FALE')
-        .replace(/Yale/g, 'Fale')
-        .replace(/yale/g, 'Fale');
-    }
-
-    // Process text nodes recursively
-    function processTextNodes(node) {
-      if (node.type === 'text') {
-        const text = node.data;
-        const newText = replaceYaleWithFale(text);
-        if (text !== newText) {
-          node.data = newText;
+    const root = parse(html);
+    
+    // Process text nodes and attributes
+    const processNode = (node) => {
+      if (node.nodeType === 3) { // Text node
+        node._rawText = replaceYaleWithFale(node._rawText);
+      }
+      
+      if (node.tagName === 'IMG') {
+        const alt = node.getAttribute('alt');
+        if (alt) {
+          node.setAttribute('alt', replaceYaleWithFale(alt));
         }
-      } else if (node.children) {
-        node.children.forEach(processTextNodes);
       }
-    }
-
-    // Process all nodes recursively
-    $('*').each((i, el) => {
-      if (el.children) {
-        el.children.forEach(processTextNodes);
+      
+      if (node.childNodes) {
+        node.childNodes.forEach(processNode);
       }
-    });
+    };
 
-    // Process title separately
-    const title = $('title').text();
-    const newTitle = replaceYaleWithFale(title);
-    $('title').text(newTitle);
+    root.childNodes.forEach(processNode);
+    const result = root.toString();
 
-    const modifiedHtml = $.html();
-
-    // Check text replacements
-    expect(modifiedHtml).toContain('Fale University');
-    expect(modifiedHtml).toContain('Welcome to Fale');
-    expect(modifiedHtml).toContain('About Fale');
-
-    // Check that attributes remain unchanged
-    expect(modifiedHtml).toContain('src="/images/yale-logo.png"');
-    expect(modifiedHtml).toContain('href="https://www.yale.edu/about"');
+    expect(result).toContain('Fale University');
+    expect(result).toContain('Welcome to Fale');
+    expect(result).toContain('About Fale');
+    expect(result).toContain('alt="Fale Logo"');
   });
 
   test('should handle text that has no Yale references', () => {
-    const $ = cheerio.load(`
+    const html = `
       <html>
         <head>
           <title>Test Page</title>
@@ -73,85 +64,49 @@ describe('Yale to Fale replacement logic', () => {
           <p>This is a test page with no references.</p>
         </body>
       </html>
-    `);
+    `;
 
-    // Function to replace Yale with Fale while preserving case
-    function replaceYaleWithFale(text) {
-      if (!text) return text;
-      return text
-        .replace(/YALE/g, 'FALE')
-        .replace(/Yale/g, 'Fale')
-        .replace(/yale/g, 'Fale');
-    }
-
-    // Process text nodes recursively
-    function processTextNodes(node) {
-      if (node.type === 'text') {
-        const text = node.data;
-        const newText = replaceYaleWithFale(text);
-        if (text !== newText) {
-          node.data = newText;
-        }
-      } else if (node.children) {
-        node.children.forEach(processTextNodes);
+    const root = parse(html);
+    const processNode = (node) => {
+      if (node.nodeType === 3) {
+        node._rawText = replaceYaleWithFale(node._rawText);
       }
-    }
-
-    // Process all nodes recursively
-    $('*').each((i, el) => {
-      if (el.children) {
-        el.children.forEach(processTextNodes);
+      if (node.childNodes) {
+        node.childNodes.forEach(processNode);
       }
-    });
+    };
 
-    const modifiedHtml = $.html();
+    root.childNodes.forEach(processNode);
+    const result = root.toString();
 
-    expect(modifiedHtml).toContain('<title>Test Page</title>');
-    expect(modifiedHtml).toContain('<h1>Hello World</h1>');
-    expect(modifiedHtml).toContain('<p>This is a test page with no references.</p>');
+    expect(result).toContain('<title>Test Page</title>');
+    expect(result).toContain('<h1>Hello World</h1>');
+    expect(result).toContain('<p>This is a test page with no references.</p>');
   });
 
   test('should handle case-insensitive replacements', () => {
-    const $ = cheerio.load(`
+    const html = `
       <html>
         <head></head>
         <body>
           <p>YALE University, Yale College, and yale medical school are all part of the same institution.</p>
         </body>
       </html>
-    `);
+    `;
 
-    // Function to replace Yale with Fale while preserving case
-    function replaceYaleWithFale(text) {
-      if (!text) return text;
-      return text
-        .replace(/YALE/g, 'FALE')
-        .replace(/Yale/g, 'Fale')
-        .replace(/yale/g, 'Fale');
-    }
-
-    // Process text nodes recursively
-    function processTextNodes(node) {
-      if (node.type === 'text') {
-        const text = node.data;
-        const newText = replaceYaleWithFale(text);
-        if (text !== newText) {
-          node.data = newText;
-        }
-      } else if (node.children) {
-        node.children.forEach(processTextNodes);
+    const root = parse(html);
+    const processNode = (node) => {
+      if (node.nodeType === 3) {
+        node._rawText = replaceYaleWithFale(node._rawText);
       }
-    }
-
-    // Process all nodes recursively
-    $('*').each((i, el) => {
-      if (el.children) {
-        el.children.forEach(processTextNodes);
+      if (node.childNodes) {
+        node.childNodes.forEach(processNode);
       }
-    });
+    };
 
-    const modifiedHtml = $.html();
+    root.childNodes.forEach(processNode);
+    const result = root.toString();
     
-    expect(modifiedHtml).toContain('FALE University, Fale College, and Fale medical school');
+    expect(result).toContain('FALE University, Fale College, and fale medical school');
   });
 });

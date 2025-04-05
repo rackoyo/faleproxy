@@ -1,5 +1,5 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
+const { parse } = require('node-html-parser');
 const { promisify } = require('util');
 const { sampleHtmlWithYale } = require('./test-utils');
 const nock = require('nock');

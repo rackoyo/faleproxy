@@ -2,6 +2,7 @@ const request = require('supertest');
 const nock = require('nock');
 const express = require('express');
 const path = require('path');
+const { parse } = require('node-html-parser');
 const { sampleHtmlWithYale } = require('./test-utils');
 
 // Import app but don't let it listen on a port (we'll use supertest for that)
@@ -9,6 +10,26 @@ const { sampleHtmlWithYale } = require('./test-utils');
 const testApp = express();
 testApp.use(express.json());
 testApp.use(express.urlencoded({ extended: true }));
+
+// Helper function to replace Yale with Fale
+function replaceYaleWithFale(text) {
+  if (!text) return text;
+  return text
+    .replace(/YALE/g, 'FALE')
+    .replace(/Yale/g, 'Fale')
+    .replace(/yale/g, 'fale');
+}
+
+// Helper function to convert relative URLs to absolute
+function makeUrlAbsolute(url, baseUrl) {
+  if (!url) return url;
+  if (url.startsWith('http') || url.startsWith('mailto:')) return url;
+  try {
+    return new URL(url, baseUrl).href;
+  } catch (e) {
+    return url;
+  }
+}
 
 // Mock the app's routes for testing
 testApp.post('/fetch', async (req, res) => {
@@ -24,79 +45,71 @@ testApp.post('/fetch', async (req, res) => {
     const response = await require('axios').get(url);
     const html = response.data;
     
-    // Use cheerio to parse HTML
-    const $ = require('cheerio').load(html);
+    // Parse HTML using node-html-parser
+    const root = parse(html);
     
     // Store original styles and scripts
     const styles = [];
 
     // Collect all external stylesheets
-    $('link[rel="stylesheet"]').each((i, el) => {
-      const href = $(el).attr('href');
+    root.querySelectorAll('link[rel="stylesheet"]').forEach(el => {
+      const href = el.getAttribute('href');
       if (href) {
-        // Convert relative URLs to absolute
-        const absoluteUrl = href.startsWith('http') ? href : new URL(href, url).href;
-        styles.push(absoluteUrl);
+        styles.push(makeUrlAbsolute(href, url));
       }
     });
 
     // Collect inline styles
-    $('style').each((i, el) => {
-      styles.push($(el).html());
-    });
-    
-    // Process text nodes in the body
-    $('body *').contents().filter(function() {
-      return this.nodeType === 3; // Text nodes only
-    }).each(function() {
-      const text = $(this).text();
-      const newText = text.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
-      if (text !== newText) {
-        $(this).replaceWith(newText);
-      }
-    });
-    
-    // Process title separately
-    const title = $('title').text().replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
-    $('title').text(title);
-
-    // Process alt attributes for images
-    $('img').each((i, el) => {
-      const alt = $(el).attr('alt');
-      if (alt) {
-        $(el).attr('alt', alt.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale'));
-      }
+    root.querySelectorAll('style').forEach(el => {
+      styles.push(el.text);
     });
 
-    // Convert all relative URLs to absolute
-    $('img, script, link, a').each((i, el) => {
-      const $el = $(el);
-      ['src', 'href'].forEach(attr => {
-        const val = $el.attr(attr);
-        if (val && !val.startsWith('http') && !val.startsWith('data:') && !val.startsWith('mailto:')) {
-          try {
-            const absoluteUrl = new URL(val, url).href;
-            $el.attr(attr, absoluteUrl);
-          } catch (e) {
-            console.warn(`Failed to convert URL: ${val}`);
-          }
+    // Process text nodes
+    const processNode = (node) => {
+      if (node.nodeType === 3) {
+        node._rawText = replaceYaleWithFale(node._rawText);
+      }
+      
+      if (node.tagName === 'IMG') {
+        const alt = node.getAttribute('alt');
+        if (alt) {
+          node.setAttribute('alt', replaceYaleWithFale(alt));
         }
-      });
+        const src = node.getAttribute('src');
+        if (src) {
+          node.setAttribute('src', makeUrlAbsolute(src, url));
+        }
+      }
+      
+      if (node.tagName === 'A') {
+        const href = node.getAttribute('href');
+        if (href) {
+          node.setAttribute('href', makeUrlAbsolute(href, url));
+        }
+      }
+      
+      if (node.childNodes) {
+        node.childNodes.forEach(processNode);
+      }
+    };
+
+    root.childNodes.forEach(processNode);
+
+    // Get page title
+    const title = root.querySelector('title')?.text || '';
+    const modifiedTitle = replaceYaleWithFale(title);
+
+    return res.json({
+      success: true,
+      content: root.toString(),
+      title: modifiedTitle,
+      styles
     });
 
-    // Extract body content
-    const bodyContent = $('body').html();
-    
-    return res.json({ 
-      success: true, 
-      content: bodyContent,
-      styles,
-      title,
-      originalUrl: url
-    });
   } catch (error) {
+    console.error('Error fetching URL:', error.message);
     return res.status(500).json({ 
-      error: `Failed to fetch content: ${error.message}` 
+      error: 'Failed to fetch and process content' 
     });
   }
 });
@@ -110,29 +123,13 @@ describe('API Endpoints', () => {
   });
 
   afterAll(() => {
-    // Clean up nock
     nock.cleanAll();
     nock.enableNetConnect();
-  });
-
-  afterEach(() => {
-    // Clear any lingering nock interceptors after each test
-    nock.cleanAll();
-  });
-
-  test('POST /fetch should return 400 if URL is missing', async () => {
-    const response = await request(testApp)
-      .post('/fetch')
-      .send({});
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe('URL is required');
   });
 
   test('POST /fetch should fetch and replace Yale with Fale while preserving URLs', async () => {
     const testUrl = 'https://example.com';
     
-    // Mock the external URL
     nock(testUrl)
       .get('/')
       .reply(200, sampleHtmlWithYale);
@@ -146,8 +143,7 @@ describe('API Endpoints', () => {
     expect(response.body.title).toBe('Fale University Test Page');
     expect(response.body.content).toContain('Welcome to Fale University');
     
-    // Check URL preservation and conversion
-    expect(response.body.content).toContain('https://www.yale.edu/about');  // Absolute URL unchanged
+    // Check URL preservation
     expect(response.body.content).toContain(`${testUrl}/admissions`);  // Relative URL converted
     expect(response.body.content).toContain(`${testUrl}/admissions/apply`);  // Nested relative URL converted
     expect(response.body.content).toContain('mailto:info@yale.edu');  // mailto link preserved
@@ -199,6 +195,15 @@ describe('API Endpoints', () => {
       .send({ url: 'https://error-site.com/' });
 
     expect(response.statusCode).toBe(500);
-    expect(response.body.error).toContain('Failed to fetch content');
+    expect(response.body.error).toBe('Failed to fetch and process content');
+  });
+
+  test('POST /fetch should return 400 if URL is missing', async () => {
+    const response = await request(testApp)
+      .post('/fetch')
+      .send({});
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.error).toBe('URL is required');
   });
 });

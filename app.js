@@ -1,40 +1,33 @@
 const express = require('express');
 const axios = require('axios');
-const cheerio = require('cheerio');
 const path = require('path');
+const { parse } = require('node-html-parser');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware to parse request bodies
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Route to serve the main page
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Function to replace Yale with Fale while preserving case
+// Helper function to replace Yale with Fale
 function replaceYaleWithFale(text) {
   if (!text) return text;
   return text
     .replace(/YALE/g, 'FALE')
     .replace(/Yale/g, 'Fale')
-    .replace(/yale/g, 'Fale'); // Always capitalize 'yale' to 'Fale'
+    .replace(/yale/g, 'fale');
 }
 
-// Process text nodes recursively
-function processTextNodes(node) {
-  if (node.type === 'text') {
-    const text = node.data;
-    const newText = replaceYaleWithFale(text);
-    if (text !== newText) {
-      node.data = newText;
-    }
-  } else if (node.children) {
-    node.children.forEach(processTextNodes);
+// Helper function to convert relative URLs to absolute
+function makeUrlAbsolute(url, baseUrl) {
+  if (!url) return url;
+  if (url.startsWith('http') || url.startsWith('mailto:')) return url;
+  try {
+    return new URL(url, baseUrl).href;
+  } catch (e) {
+    return url;
   }
 }
 
@@ -51,65 +44,72 @@ app.post('/fetch', async (req, res) => {
     const response = await axios.get(url);
     const html = response.data;
 
-    // Use cheerio to parse HTML
-    const $ = cheerio.load(html);
+    // Parse HTML using node-html-parser
+    const root = parse(html);
     
     // Store original styles and scripts
     const styles = [];
-    const scripts = [];
 
     // Collect all external stylesheets
-    $('link[rel="stylesheet"]').each((i, el) => {
-      const href = $(el).attr('href');
+    root.querySelectorAll('link[rel="stylesheet"]').forEach(el => {
+      const href = el.getAttribute('href');
       if (href) {
-        // Convert relative URLs to absolute
-        const absoluteUrl = href.startsWith('http') ? href : new URL(href, url).href;
-        styles.push(absoluteUrl);
+        styles.push(makeUrlAbsolute(href, url));
       }
     });
 
     // Collect inline styles
-    $('style').each((i, el) => {
-      styles.push($(el).html());
+    root.querySelectorAll('style').forEach(el => {
+      styles.push(el.text);
     });
 
-    // Process all nodes recursively
-    $('*').each((i, el) => {
-      if (el.children) {
-        el.children.forEach(processTextNodes);
+    // Process text nodes
+    const processNode = (node) => {
+      if (node.nodeType === 3) {
+        node._rawText = replaceYaleWithFale(node._rawText);
       }
-    });
-
-    // Process title separately since it might not be caught by the recursive function
-    const title = $('title').text();
-    const newTitle = replaceYaleWithFale(title);
-    $('title').text(newTitle);
-
-    // Convert all relative URLs (images, links, etc.) to absolute URLs
-    $('img, script, link, a').each((i, el) => {
-      const $el = $(el);
-      ['src', 'href'].forEach(attr => {
-        const val = $el.attr(attr);
-        if (val && !val.startsWith('http') && !val.startsWith('data:')) {
-          try {
-            const absoluteUrl = new URL(val, url).href;
-            $el.attr(attr, absoluteUrl);
-          } catch (e) {
-            console.warn(`Failed to convert URL: ${val}`);
-          }
+      
+      if (node.tagName === 'IMG') {
+        const alt = node.getAttribute('alt');
+        if (alt) {
+          node.setAttribute('alt', replaceYaleWithFale(alt));
         }
-      });
-    });
+        const src = node.getAttribute('src');
+        if (src) {
+          node.setAttribute('src', makeUrlAbsolute(src, url));
+        }
+      }
+      
+      if (node.tagName === 'A') {
+        const href = node.getAttribute('href');
+        if (href) {
+          node.setAttribute('href', makeUrlAbsolute(href, url));
+        }
+      }
 
-    // Extract body content
-    const bodyContent = $('body').html();
-    
-    return res.json({ 
-      success: true, 
-      content: bodyContent,
-      styles,
-      title: newTitle,
-      originalUrl: url
+      if (node.tagName === 'META') {
+        const content = node.getAttribute('content');
+        if (content) {
+          node.setAttribute('content', replaceYaleWithFale(content));
+        }
+      }
+      
+      if (node.childNodes) {
+        node.childNodes.forEach(processNode);
+      }
+    };
+
+    root.childNodes.forEach(processNode);
+
+    // Get page title
+    const title = root.querySelector('title')?.text || '';
+    const modifiedTitle = replaceYaleWithFale(title);
+
+    return res.json({
+      success: true,
+      content: root.toString(),
+      title: modifiedTitle,
+      styles
     });
 
   } catch (error) {
@@ -120,11 +120,17 @@ app.post('/fetch', async (req, res) => {
   }
 });
 
+// Route to serve the main page
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Only start the server if this file is run directly
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`Faleproxy server running at http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
   });
 }
 
+// Export for testing
 module.exports = app;
