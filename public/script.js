@@ -7,13 +7,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const contentDisplay = document.getElementById('content-display');
     const originalUrlElement = document.getElementById('original-url');
     const pageTitleElement = document.getElementById('page-title');
+    let currentResizeObserver = null;
 
     urlForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
         const url = urlInput.value.trim();
         
-        if (!url) {
+        // Validate URL format
+        try {
+            new URL(url);
+        } catch {
             showError('Please enter a valid URL');
             return;
         }
@@ -24,6 +28,12 @@ document.addEventListener('DOMContentLoaded', () => {
         errorMessage.classList.add('hidden');
         
         try {
+            // Clean up previous ResizeObserver if it exists
+            if (currentResizeObserver) {
+                currentResizeObserver.disconnect();
+                currentResizeObserver = null;
+            }
+
             const response = await fetch('/fetch', {
                 method: 'POST',
                 headers: {
@@ -112,15 +122,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     link.target = '_blank';
                     link.rel = 'noopener noreferrer';
                 });
+
+                // Add a resize observer to handle dynamic content changes
+                if (iframeDocument.body) {
+                    currentResizeObserver = new ResizeObserver(() => {
+                        adjustIframeHeight();
+                    });
+                    currentResizeObserver.observe(iframeDocument.body);
+                }
             };
-            
-            // Add a resize observer to handle dynamic content changes
-            if (iframeDocument.body) {
-                const resizeObserver = new ResizeObserver(() => {
-                    adjustIframeHeight();
-                });
-                resizeObserver.observe(iframeDocument.body);
-            }
             
             // Show result container
             resultContainer.classList.remove('hidden');

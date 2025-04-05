@@ -13,11 +13,36 @@ if (typeof Blob === 'undefined') {
   global.Blob = Blob;
 }
 
-// Add fetch polyfill if needed
-if (!global.fetch) {
-  const fetch = require('node-fetch');
-  global.fetch = fetch;
-  global.Headers = fetch.Headers;
-  global.Request = fetch.Request;
-  global.Response = fetch.Response;
-}
+// Mock global browser APIs
+global.fetch = jest.fn();
+
+// Mock ResizeObserver
+global.ResizeObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
+}));
+
+// Mock Event constructor
+global.Event = class Event {
+  constructor(type) {
+    this.type = type;
+  }
+};
+
+// Mock preventDefault
+Event.prototype.preventDefault = jest.fn();
+
+// Set up initial DOM structure
+document.body.innerHTML = `
+  <form id="url-form">
+    <input id="url-input" type="text">
+  </form>
+  <div id="loading" class="hidden"></div>
+  <div id="error-message" class="hidden"></div>
+  <div id="result-container" class="hidden">
+    <div id="content-display"></div>
+    <a id="original-url"></a>
+    <div id="page-title"></div>
+  </div>
+`;

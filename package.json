@@ -1,63 +1,64 @@
 {
   "name": "faleproxy",
   "version": "1.0.0",
-  "description": "A proxy that replaces 'Yale' with 'Fale' in web content",
+  "description": "",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js",
-    "vercel-build": "echo 'Building for Vercel deployment'",
     "test": "jest",
-    "test:watch": "jest --watch",
     "test:ci": "jest --ci --coverage",
-    "preinstall": "npx only-allow npm"
+    "dev": "nodemon app.js"
   },
-  "engines": {
-    "node": ">=16.x"
-  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "axios": "^1.6.2",
-    "cheerio": "0.22.0",
+    "axios": "^1.6.7",
+    "cheerio": "^1.0.0-rc.12",
     "express": "^4.18.2",
-    "lodash.assignin": "^4.2.0",
-    "lodash.bind": "^4.2.1",
-    "lodash.defaults": "^4.2.0",
-    "lodash.filter": "^4.6.0",
-    "lodash.flatten": "^4.4.0",
-    "lodash.foreach": "^4.5.0",
-    "lodash.map": "^4.6.0",
-    "lodash.merge": "^4.6.2",
-    "lodash.pick": "^4.4.0",
-    "lodash.reduce": "^4.6.0",
-    "lodash.reject": "^4.6.0",
-    "lodash.some": "^4.6.0",
-    "web-streams-polyfill": "^3.3.3"
+    "web-streams-polyfill": "^4.0.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",
-    "nock": "^13.5.6",
-    "node-fetch": "2.7.0",
-    "nodemon": "^3.0.1",
+    "jest-environment-jsdom": "^29.7.0",
+    "nock": "^13.5.4",
+    "nodemon": "^3.0.3",
     "supertest": "^6.3.4"
   },
   "jest": {
-    "testEnvironment": "node",
-    "setupFilesAfterEnv": [
-      "<rootDir>/tests/setup.js"
-    ],
-    "collectCoverageFrom": [
-      "**/*.js",
-      "!**/node_modules/**",
-      "!**/coverage/**",
-      "!jest.config.js"
-    ],
+    "testEnvironmentOptions": {
+      "url": "http://localhost"
+    },
     "coverageThreshold": {
       "global": {
-        "statements": 70,
         "branches": 70,
         "functions": 70,
-        "lines": 70
+        "lines": 70,
+        "statements": 70
       }
-    }
+    },
+    "collectCoverageFrom": [
+      "app.js",
+      "public/**/*.js",
+      "!tests/**",
+      "!**/node_modules/**"
+    ],
+    "projects": [
+      {
+        "displayName": "node",
+        "testEnvironment": "node",
+        "testMatch": [
+          "<rootDir>/tests/!(script).test.js"
+        ]
+      },
+      {
+        "displayName": "jsdom",
+        "testEnvironment": "jsdom",
+        "testMatch": [
+          "<rootDir>/tests/script.test.js"
+        ],
+        "setupFiles": ["<rootDir>/tests/setup.js"]
+      }
+    ]
   }
 }
