@@ -1,10 +1,10 @@
 // Add global polyfills for Node.js environments that don't have them
 const { Readable } = require('stream');
-const { ReadableStream: WebReadableStream } = require('web-streams-polyfill/ponyfill/es2018');
+const { ReadableStream } = require('web-streams-polyfill');
 
 // Add ReadableStream polyfill
 if (typeof ReadableStream === 'undefined') {
-  global.ReadableStream = WebReadableStream;
+  global.ReadableStream = ReadableStream;
 }
 
 // Add Blob polyfill if needed

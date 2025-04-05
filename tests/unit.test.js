@@ -16,19 +16,39 @@ describe('Yale to Fale replacement logic', () => {
       </html>
     `);
 
-    // Process text nodes in the body
-    $('body *').contents().filter(function() {
-      return this.nodeType === 3;
-    }).each(function() {
-      const text = $(this).text();
-      const newText = text.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
-      if (text !== newText) {
-        $(this).replaceWith(newText);
+    // Function to replace Yale with Fale while preserving case
+    function replaceYaleWithFale(text) {
+      if (!text) return text;
+      return text
+        .replace(/YALE/g, 'FALE')
+        .replace(/Yale/g, 'Fale')
+        .replace(/yale/g, 'Fale');
+    }
+
+    // Process text nodes recursively
+    function processTextNodes(node) {
+      if (node.type === 'text') {
+        const text = node.data;
+        const newText = replaceYaleWithFale(text);
+        if (text !== newText) {
+          node.data = newText;
+        }
+      } else if (node.children) {
+        node.children.forEach(processTextNodes);
+      }
+    }
+
+    // Process all nodes recursively
+    $('*').each((i, el) => {
+      if (el.children) {
+        el.children.forEach(processTextNodes);
       }
     });
 
-    const title = $('title').text().replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
-    $('title').text(title);
+    // Process title separately
+    const title = $('title').text();
+    const newTitle = replaceYaleWithFale(title);
+    $('title').text(newTitle);
 
     const modifiedHtml = $.html();
 
@@ -55,13 +75,32 @@ describe('Yale to Fale replacement logic', () => {
       </html>
     `);
 
-    $('body *').contents().filter(function() {
-      return this.nodeType === 3;
-    }).each(function() {
-      const text = $(this).text();
-      const newText = text.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
-      if (text !== newText) {
-        $(this).replaceWith(newText);
+    // Function to replace Yale with Fale while preserving case
+    function replaceYaleWithFale(text) {
+      if (!text) return text;
+      return text
+        .replace(/YALE/g, 'FALE')
+        .replace(/Yale/g, 'Fale')
+        .replace(/yale/g, 'Fale');
+    }
+
+    // Process text nodes recursively
+    function processTextNodes(node) {
+      if (node.type === 'text') {
+        const text = node.data;
+        const newText = replaceYaleWithFale(text);
+        if (text !== newText) {
+          node.data = newText;
+        }
+      } else if (node.children) {
+        node.children.forEach(processTextNodes);
+      }
+    }
+
+    // Process all nodes recursively
+    $('*').each((i, el) => {
+      if (el.children) {
+        el.children.forEach(processTextNodes);
       }
     });
 
@@ -82,13 +121,32 @@ describe('Yale to Fale replacement logic', () => {
       </html>
     `);
 
-    $('body *').contents().filter(function() {
-      return this.nodeType === 3;
-    }).each(function() {
-      const text = $(this).text();
-      const newText = text.replace(/Yale/g, 'Fale').replace(/yale/g, 'fale');
-      if (text !== newText) {
-        $(this).replaceWith(newText);
+    // Function to replace Yale with Fale while preserving case
+    function replaceYaleWithFale(text) {
+      if (!text) return text;
+      return text
+        .replace(/YALE/g, 'FALE')
+        .replace(/Yale/g, 'Fale')
+        .replace(/yale/g, 'Fale');
+    }
+
+    // Process text nodes recursively
+    function processTextNodes(node) {
+      if (node.type === 'text') {
+        const text = node.data;
+        const newText = replaceYaleWithFale(text);
+        if (text !== newText) {
+          node.data = newText;
+        }
+      } else if (node.children) {
+        node.children.forEach(processTextNodes);
+      }
+    }
+
+    // Process all nodes recursively
+    $('*').each((i, el) => {
+      if (el.children) {
+        el.children.forEach(processTextNodes);
       }
     });
 

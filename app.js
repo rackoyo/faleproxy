@@ -4,7 +4,7 @@ const cheerio = require('cheerio');
 const path = require('path');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware to parse request bodies
 app.use(express.json());
@@ -15,6 +15,28 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+// Function to replace Yale with Fale while preserving case
+function replaceYaleWithFale(text) {
+  if (!text) return text;
+  return text
+    .replace(/YALE/g, 'FALE')
+    .replace(/Yale/g, 'Fale')
+    .replace(/yale/g, 'Fale'); // Always capitalize 'yale' to 'Fale'
+}
+
+// Process text nodes recursively
+function processTextNodes(node) {
+  if (node.type === 'text') {
+    const text = node.data;
+    const newText = replaceYaleWithFale(text);
+    if (text !== newText) {
+      node.data = newText;
+    }
+  } else if (node.children) {
+    node.children.forEach(processTextNodes);
+  }
+}
 
 // API endpoint to fetch and modify content
 app.post('/fetch', async (req, res) => {
@@ -51,36 +73,14 @@ app.post('/fetch', async (req, res) => {
       styles.push($(el).html());
     });
 
-    // Function to replace Yale with Fale while preserving case
-    function replaceYaleWithFale(text) {
-      if (!text) return text;
-      return text
-        .replace(/YALE/g, 'FALE')
-        .replace(/Yale/g, 'Fale')
-        .replace(/yale/g, 'fale');
-    }
-    
-    // Process text nodes in the body
-    const processTextNodes = (node) => {
-      if (node.type === 'text') {
-        const text = node.data;
-        const newText = replaceYaleWithFale(text);
-        if (text !== newText) {
-          node.data = newText;
-        }
-      } else if (node.children) {
-        node.children.forEach(processTextNodes);
-      }
-    };
-
     // Process all nodes recursively
     $('*').each((i, el) => {
       if (el.children) {
         el.children.forEach(processTextNodes);
       }
     });
-    
-    // Process title separately
+
+    // Process title separately since it might not be caught by the recursive function
     const title = $('title').text();
     const newTitle = replaceYaleWithFale(title);
     $('title').text(newTitle);
@@ -115,12 +115,16 @@ app.post('/fetch', async (req, res) => {
   } catch (error) {
     console.error('Error fetching URL:', error.message);
     return res.status(500).json({ 
-      error: `Failed to fetch content: ${error.message}` 
+      error: 'Failed to fetch and process content' 
     });
   }
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Faleproxy server running at http://localhost:${PORT}`);
-});
+// Only start the server if this file is run directly
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Faleproxy server running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
