@@ -61,13 +61,22 @@ app.post('/fetch', async (req, res) => {
     }
     
     // Process text nodes in the body
-    $('*').contents().filter(function() {
-      return this.type === 'text';
-    }).each(function() {
-      const text = $(this).text();
-      const newText = replaceYaleWithFale(text);
-      if (text !== newText) {
-        $(this).replaceWith(newText);
+    const processTextNodes = (node) => {
+      if (node.type === 'text') {
+        const text = node.data;
+        const newText = replaceYaleWithFale(text);
+        if (text !== newText) {
+          node.data = newText;
+        }
+      } else if (node.children) {
+        node.children.forEach(processTextNodes);
+      }
+    };
+
+    // Process all nodes recursively
+    $('*').each((i, el) => {
+      if (el.children) {
+        el.children.forEach(processTextNodes);
       }
     });
     
