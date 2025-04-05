@@ -15,10 +15,10 @@ jobs:
         node-version: [18.x, 20.x]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
@@ -29,13 +29,15 @@ jobs:
     - name: Run tests
       id: run-tests
       run: npm run test:ci
+      continue-on-error: false
       
     - name: Upload coverage report
       if: success()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: coverage-report
+        name: coverage-report-${{ matrix.node-version }}
         path: coverage/
+        retention-days: 14
         
   deploy:
     needs: test
@@ -44,12 +46,13 @@ jobs:
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
       github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: production
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '18.x'
         cache: 'npm'
@@ -75,6 +78,7 @@ jobs:
         VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       
     - name: Deploy Project Artifacts to Vercel
+      if: success()
       run: vercel deploy --prebuilt --prod
       env:
         VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
